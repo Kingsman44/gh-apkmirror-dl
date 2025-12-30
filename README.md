@@ -1,119 +1,101 @@
 # gh-apkmirror-dl
 This GitHub Action allows you to download APK files from APKMirror.
-It supports specifying the organization, repository, app version, version patterns with regex, prerelease inclusion, bundle downloads, and custom file naming.
+
+**Features:**
+- Download APK/APKM files from APKMirror
+- Auto-detect latest version or specify exact version
+- Regex pattern matching for version filtering (e.g., `.*-pixel`, `.*-gphone`)
+- Filter by CPU architecture (arm64-v8a, armeabi-v7a) and DPI
+- Extract APK metadata (signature, date, version, API level)
+- Template-based filename generation with variant information
+- Support for alpha/beta prerelease versions
+- Full variant details in outputs
 
 Credits to [@tanishqmanuja](https://github.com/tanishqmanuja) for the initial apkmirror scraping code.
 Original action by [@Yakov5776](https://github.com/Yakov5776).
 
+---
 
-## Example Usage
+## Quick Start
 
-### Basic Usage (Latest Stable Version)
+### Comprehensive Example (All Features)
 ```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'google-inc'
-    repo: 'google-phone'
-    bundle: false
-    filename: 'phone.apk'
-```
-
-### Download Specific Version
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'fidelity-investments'
-    repo: 'fidelity-investments'
-    version: '3.96'
-    bundle: false
-    filename: 'fidelity.apk'
-```
-
-### Download with Version Pattern (Regex)
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'google-inc'
-    repo: 'google-phone'
-    versionPattern: '.*-pixel$'
-    bundle: false
-    filename: 'phone-pixel.apk'
-```
-
-### Include Prerelease Versions
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'google-inc'
-    repo: 'google-phone'
-    versionPattern: '.*-alpha'
-    includePrerelease: true
-    bundle: false
-    filename: 'phone-alpha.apk'
-```
-
-## Parameters
-
-| Parameter | Description | Required | Default |
-|-----------|-------------|----------|---------|
-| **org** | Organization name on APKMirror | Yes | - |
-| **repo** | Repository name on APKMirror | Yes | - |
-| **version** | Specific version to download (e.g., `14.0.0`) | No | Auto-detect latest |
-| **versionPattern** | Regex pattern to match versions (e.g., `.*-pixel`, `.*-gphone`, `10\.[0-2].*`) | No | None |
-| **includePrerelease** | Include alpha/beta versions when auto-detecting | No | `false` |
-| **bundle** | Download app bundle (AAB) instead of APK | No | `false` |
-| **filename** | Output filename (uses server filename if not specified) | No | Server default |
-| **overwrite** | Overwrite existing file | No | `true` |
-
-## Outputs
-
-- **filename**: The filename the app was downloaded as
-
-## Examples
-
-### Download Latest Google Phone APK
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'google-inc'
-    repo: 'google-phone'
-    filename: 'google-phone.apk'
-```
-
-### Download Latest Google Dialer with Specific Variant
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'google-inc'
-    repo: 'google-dialer'
-    versionPattern: '.*-pixel'  # Match versions with -pixel
-    bundle: false
-```
-
-### Download with Multiple Pattern Options
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
-  with:
-    org: 'google-inc'
-    repo: 'google-phone'
-    versionPattern: 'gphone|pixel'  # Match either gphone OR pixel
-    bundle: false
-```
-
-### Download and Check Output
-```yml
-- uses: Kingsman44/gh-apkmirror-dl@v1.4
+- uses: Kingsman44/gh-apkmirror-dl@v2
   id: download
   with:
     org: 'google-inc'
-    repo: 'google-phone'
-    filename: 'phone.apk'
+    repo: 'google-dialer'
+    versionPattern: '.*-pixel'           # Match versions with "-pixel"
+    includePrerelease: false             # Exclude alpha/beta
+    arch: 'arm64-v8a'                    # Filter to 64-bit ARM only
+    dpi: 'nodpi'                         # Filter to universal DPI
+    filename: 'Dialer-${version}-api${minSdk}-${arch}.apk'
+    bundle: false                        # Download APK (not AAB)
+    overwrite: true                      # Overwrite if exists
 
-- name: Show downloaded file
-  run: echo "Downloaded: ${{ steps.download.outputs.filename }}"
+# Use the outputs
+- name: Display Download Info
+  run: |
+    echo "Downloaded: ${{ steps.download.outputs.filename }}"
+    echo "Version: ${{ steps.download.outputs.version }}"
+    echo "Architecture: ${{ steps.download.outputs.arch }}"
+    echo "DPI: ${{ steps.download.outputs.dpi }}"
+    echo "Signature: ${{ steps.download.outputs.signature }}"
+    echo "Date: ${{ steps.download.outputs.date }}"
+    echo "Min SDK: Android API ${{ steps.download.outputs.minSdk }}"
 ```
+
+---
+
+## Parameters
+
+| Parameter | Description | Type | Default |
+|-----------|-------------|------|---------|
+| **org** | Organization name on APKMirror | `string` | Required |
+| **repo** | Repository name on APKMirror | `string` | Required |
+| **version** | Specific version (e.g., `14.0.0`) | `string` | Auto-detect latest |
+| **versionPattern** | Regex to match versions (e.g., `.*-pixel`, `gphone\|pixel`) | `string` | None |
+| **includePrerelease** | Include alpha/beta versions | `boolean` | `false` |
+| **arch** | Filter by CPU architecture (e.g., `arm64-v8a`, `armeabi-v7a`) | `string` | First available |
+| **dpi** | Filter by screen DPI (e.g., `nodpi`, `hdpi`, `xxhdpi`) | `string` | First available |
+| **bundle** | Download AAB bundle instead of APK | `boolean` | `false` |
+| **filename** | Output filename with template variables | `string` | Server default |
+| **overwrite** | Overwrite existing file | `boolean` | `true` |
+
+### Filename Template Variables
+
+Use these in the `filename` parameter:
+- `${version}` - App version number
+- `${variant}` - Android version variant (e.g., Android 14)
+- `${arch}` - CPU architecture (e.g., arm64-v8a)
+- `${dpi}` - Screen DPI (e.g., nodpi)
+- `${minSdk}` - Minimum API level (e.g., 30)
+- `${signature}` - APK signature hash
+- `${date}` - Release date
+
+---
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| **filename** | Downloaded file name |
+| **version** | App version number |
+| **variant** | Android variant (e.g., Android 14) |
+| **arch** | CPU architecture |
+| **dpi** | Screen DPI |
+| **minSdk** | Minimum Android API level |
+| **signature** | APK signature hash |
+| **date** | Release date (UTC) |
+
+---
 
 ## Version History
 
-- **v1.4** - Added regex version pattern matching and prerelease version support
+- **v2.0** - Major update with metadata extraction, filtering, and template filenames
+  - Extract signature, date, API level, architecture, DPI
+  - Filter variants by architecture and DPI
+  - Template-based filename generation
+  - Improved version pattern matching
+- **v1.4** - Added regex version pattern matching and prerelease support
 - **v1.3** - Initial release with basic APK/bundle download

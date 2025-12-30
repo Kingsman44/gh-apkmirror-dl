@@ -18,20 +18,44 @@ inputs:
       required: false
       default: 'false'
     bundle:
-      description: 'Download app bundle (AAB) instead of APK'
+      description: 'Download app bundle (APKM) instead of APK'
       required: false
       default: 'false'
+    arch:
+      description: 'Filter by CPU architecture (e.g., arm64-v8a, armeabi-v7a). If not specified, uses first available'
+      required: false
+    dpi:
+      description: 'Filter by screen DPI (e.g., nodpi, hdpi, xxhdpi). If not specified, uses first available'
+      required: false
     filename:
-      description: 'Output filename (uses server filename if not specified)'
+      description: 'Output filename. Supports template variables: ${version}, ${variant}, ${arch}, ${dpi}, ${minSdk}, ${signature}, ${date} (e.g., Google-Dialer-${minSdk}-${arch}.apk)'
       required: false
     overwrite:
       description: 'Overwrite existing file'
       required: false
       default: 'true'
+    DEBUG:
+      description: 'Enable debug logging (set to "true" to enable)'
+      required: false
+      default: 'false'
 
 outputs:
   filename:
     description: 'The downloaded filename'
+  minSdk:
+    description: 'Minimum Android SDK API level (e.g., 32 for Android 12L, 33 for Android 13)'
+  variant:
+    description: 'Android version/variant (e.g., Android 14, Android 13)'
+  arch:
+    description: 'CPU architecture (e.g., arm64-v8a, armeabi-v7a)'
+  dpi:
+    description: 'Screen DPI (e.g., all, hdpi, xxhdpi)'
+  version:
+    description: 'App version number (e.g., 14.0.1)'
+  date:
+    description: 'Release date (UTC)'
+  signature:
+    description: 'APK signature hash'
 
 runs:
   using: 'node20'

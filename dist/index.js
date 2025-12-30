@@ -27326,6 +27326,11 @@ __nccwpck_require__.a(__webpack_module__, async (__webpack_handle_async_dependen
 
 const BASE_URL = "https://www.apkmirror.com";
 
+const DEBUG = (_actions_core__WEBPACK_IMPORTED_MODULE_4__.getInput('DEBUG') || '').toLowerCase() === 'true';
+function debugLog(...args) {
+    if (DEBUG) console.log(...args);
+}
+
 
 async function getHtmlForApkMirror(url) {
     return (0,_fetch_js__WEBPACK_IMPORTED_MODULE_5__/* .fetchHeaders */ .v)(BASE_URL + url).then((r) => r.text());
@@ -27364,9 +27369,84 @@ function extractVersion(input) {
     return match ? match[0] : undefined;
 }
 
+function extractMinSdk(input) {
+    // Extract Android version (e.g., "Android 11+", "Android 12", "Android 13+")
+    const androidRegex = /Android\s+(\d+(?:\.\d+)?L?)\+?/i;
+    const match = input.match(androidRegex);
+    
+    if (match && match[1]) {
+        const versionStr = match[1];
+        return versionStr;
+    }
+    
+    return null;
+}
+
+function versionToApiLevel(versionStr) {
+    const versionMap = {
+        '16': 36,
+        '15': 35,
+        '14': 34,
+        '13': 33,
+        '12.1': 32,
+        '12L': 32,
+        '12': 31,
+        '11': 30,
+        '10': 29,
+        '9': 28,
+        '8.1': 27,
+        '8.1.0': 27,
+        '8.0': 26,
+        '8.0.0': 26,
+        '7.1': 25,
+        '7.0': 24,
+        '6.0': 23,
+        '5.1': 22,
+        '5.0': 21,
+        '4.4': 19,
+        '4.3': 18,
+        '4.2': 17,
+        '4.1': 16,
+        '4.0': 15,
+        '3.2': 13,
+        '3.1': 12,
+        '3.0': 11,
+        '2.3': 10,
+        '2.2': 8,
+        '2.1': 7,
+        '2.0': 5,
+        '1.6': 4,
+        '1.5': 3,
+        '1.1': 2,
+        '1.0': 1
+    };
+    
+    // Try exact match first
+    if (versionMap[versionStr]) {
+        return versionMap[versionStr];
+    }
+    
+    // Try with first two parts (e.g., "8.1" from "8.1.0")
+    const parts = versionStr.split('.');
+    if (parts.length >= 2) {
+        const majorMinor = `${parts[0]}.${parts[1]}`;
+        if (versionMap[majorMinor]) {
+            return versionMap[majorMinor];
+        }
+    }
+    
+    // Try with just major version (e.g., "8" from "8.0.0")
+    const major = parts[0];
+    if (versionMap[major]) {
+        return versionMap[major];
+    }
+    
+    return null;
+}
+
 async function getStableLatestVersion(org, repo, versionPattern = null, includePrerelease = false) {
     const apkmUrl = `${BASE_URL}/apk/${org}/${repo}`;
-    console.log(`[DEBUG] Fetching versions from: ${apkmUrl}`);
+    debugLog(`[DEBUG] Fetching versions from: ${apkmUrl}`);
     
     const response = await (0,_fetch_js__WEBPACK_IMPORTED_MODULE_5__/* .fetchHeaders */ .v)(apkmUrl);
     const html = await response.text();
@@ -27381,7 +27461,7 @@ async function getStableLatestVersion(org, repo, versionPattern = null, includeP
         url: $(v).attr("href")
     }));
     
-    console.log(`[DEBUG] Found versions (all): ${versions.length}`, versions.map(v => v.text));
+    debugLog(`[DEBUG] Found versions (all): ${versions.length}`, versions.map(v => v.text));
     
     let filteredVersions = versions;
     
@@ -27390,15 +27470,15 @@ async function getStableLatestVersion(org, repo, versionPattern = null, includeP
         filteredVersions = filteredVersions.filter(
             (v) => !v.text.includes("alpha") && !v.text.includes("beta")
         );
-        console.log(`[DEBUG] Stable versions (no alpha/beta): ${filteredVersions.length}`, filteredVersions.map(v => v.text));
+        debugLog(`[DEBUG] Stable versions (no alpha/beta): ${filteredVersions.length}`, filteredVersions.map(v => v.text));
     } else {
-        console.log(`[DEBUG] Including prerelease versions (alpha/beta): ${filteredVersions.length}`);
+        debugLog(`[DEBUG] Including prerelease versions (alpha/beta): ${filteredVersions.length}`);
     }
     
     if (versionPattern) {
         const regex = new RegExp(versionPattern);
         filteredVersions = filteredVersions.filter((v) => regex.test(v.text));
-        console.log(`[DEBUG] Filtered by pattern '${versionPattern}': ${filteredVersions.length}`, filteredVersions.map(v => v.text));
+        debugLog(`[DEBUG] Filtered by pattern '${versionPattern}': ${filteredVersions.length}`, filteredVersions.map(v => v.text));
     }
     
     const stableVersion = filteredVersions[0];
@@ -27408,10 +27488,15 @@ async function getStableLatestVersion(org, repo, versionPattern = null, includeP
     }
     
     const extractedVersion = extractVersion(stableVersion.text);
+    const minSdkVersion = extractMinSdk(stableVersion.text);
+    const minSdkApiLevel = minSdkVersion ? versionToApiLevel(minSdkVersion) : null;
     const releaseUrl = stableVersion.url;
-    console.log(`[DEBUG] Extracted version: ${extractedVersion}`);
-    console.log(`[DEBUG] Release URL: ${releaseUrl}`);
-    return { version: extractedVersion, releaseUrl };
+    debugLog(`[DEBUG] Extracted version: ${extractedVersion}`);
+    if (minSdkVersion) {
+        debugLog(`[DEBUG] Minimum SDK: Android ${minSdkVersion} (API level ${minSdkApiLevel})`);
+    }
+    debugLog(`[DEBUG] Release URL: ${releaseUrl}`);
+    return { version: extractedVersion, minSdkVersion, minSdkApiLevel, releaseUrl };
 }
 
 async function getDownloadUrl(downloadPageUrl) {
@@ -27433,8 +27518,8 @@ async function getVariants(org, repo, versionOrUrl, bundle) {
         )}-release`;
     }
     
-    console.log(`[DEBUG] Fetching variants from: ${apkmUrl}`);
-    console.log(`[DEBUG] Looking for: ${bundle ? 'BUNDLE' : 'APK'}`);
+    debugLog(`[DEBUG] Fetching variants from: ${apkmUrl}`);
+    debugLog(`[DEBUG] Looking for: ${bundle ? 'BUNDLE' : 'APK'}`);
     
     const response = await (0,_fetch_js__WEBPACK_IMPORTED_MODULE_5__/* .fetchHeaders */ .v)(apkmUrl);
     const html = await response.text();
@@ -27447,23 +27532,51 @@ async function getVariants(org, repo, versionOrUrl, bundle) {
         rows = $('.variants-table .table-row:has(span.apkm-badge:contains("APK"))');
     }
     
-    console.log(`[DEBUG] Found rows: ${rows.length}`);
+    debugLog(`[DEBUG] Found rows: ${rows.length}`);
     
     const parsedData = [];
     
     rows.each((_index, row) => {
         const columns = $(row).find(".table-cell");
         
-        const variant = $(columns[0]).text().trim();
+        // Column 0: Version (extract from link text)
+        const versionLink = $(columns[0]).find("a");
+        const version = versionLink.text().trim();
+        
+        // Column 1: Architecture
         const arch = $(columns[1]).text().trim();
-        const version = $(columns[2]).text().trim();
+        
+        // Column 2: Android version/Variant
+        const variant = $(columns[2]).text().trim();
+        
+        // Column 3: DPI
         const dpi = $(columns[3]).text().trim();
+        
+        // Column 4: Download URL
         const url = $(columns[4]).find("a").attr("href");
         
+        // Last column: Extended details (signature, date)
+        const lastColumn = columns[columns.length - 1];
+        const extendedCell = $(lastColumn);
+        
+        // Extract signature from tooltip
+        const signatureSpan = extendedCell.find('.signature');
+        const signatureTooltip = signatureSpan.attr('data-apkm-tooltip') || '';
+        const signatureMatch = signatureTooltip.match(/Signature: ([a-f0-9]+)/i);
+        const signature = signatureMatch ? signatureMatch[1] : signatureSpan.text().trim();
+        
+        // Extract date
+        const dateSpan = extendedCell.find('.dateyear_utc');
+        const dateText = dateSpan.attr('data-utcdate') || dateSpan.text().trim();
+        
         if (!variant || !arch || !version || !dpi || !url) {
-            console.log(`[DEBUG] Skipped incomplete row: variant=${variant}, arch=${arch}, version=${version}, dpi=${dpi}, url=${url}`);
+            debugLog(`[DEBUG] Skipped incomplete row: variant=${variant}, arch=${arch}, version=${version}, dpi=${dpi}, url=${url}`);
             return;
         }
+        
+        // Extract SDK version and API level from variant
+        const variantMinSdk = extractMinSdk(variant);
+        const variantMinSdkApiLevel = variantMinSdk ? versionToApiLevel(variantMinSdk) : null;
         
         const rowData = {
             variant,
@@ -27471,13 +27584,17 @@ async function getVariants(org, repo, versionOrUrl, bundle) {
             version,
             dpi,
             url,
+            date: dateText,
+            signature,
+            minSdkVersion: variantMinSdk,
+            minSdkApiLevel: variantMinSdkApiLevel
         };
-        
-        console.log(`[DEBUG] Added variant: ${variant} (${arch}, ${dpi})`);
+
+        debugLog(`[DEBUG] Added variant: ${variant} (${arch}, ${dpi}) - API ${variantMinSdkApiLevel} - ${signature} - ${dateText}`);
         parsedData.push(rowData);
     });
     
-    console.log(`[DEBUG] Total parsed variants: ${parsedData.length}`);
+    debugLog(`[DEBUG] Total parsed variants: ${parsedData.length}`);
     return parsedData;
 }
 
@@ -27520,6 +27637,8 @@ const version = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getInput('version');
 const versionPattern = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getInput('versionPattern');
 const includePrerelease = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getBooleanInput('includePrerelease');
 const bundle = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getBooleanInput('bundle');
+const archFilter = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getInput('arch');
+const dpiFilter = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getInput('dpi');
 const name = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getInput('filename');
 const overwrite = _actions_core__WEBPACK_IMPORTED_MODULE_4__.getBooleanInput('overwrite') ?? true;
 
@@ -27530,9 +27649,15 @@ console.log(`[INFO] Include Prerelease: ${includePrerelease}, Bundle: ${bundle},
 
 const selectedVersion = version || await getStableLatestVersion(org, repo, versionPattern, includePrerelease);
 const selectedVersionStr = typeof selectedVersion === 'object' ? selectedVersion.version : selectedVersion;
+const selectedMinSdkVersion = typeof selectedVersion === 'object' ? selectedVersion.minSdkVersion : null;
+const selectedMinSdkApiLevel = typeof selectedVersion === 'object' ? selectedVersion.minSdkApiLevel : null;
 const releaseUrl = typeof selectedVersion === 'object' ? selectedVersion.releaseUrl : null;
 
-console.log(`\n[DEBUG] Selected version: ${selectedVersionStr}\n`);
+debugLog(`\n[DEBUG] Selected version: ${selectedVersionStr}`);
+if (selectedMinSdkVersion) {
+    debugLog(`[DEBUG] Minimum SDK: Android ${selectedMinSdkVersion} (API level ${selectedMinSdkApiLevel})`);
+}
+debugLog('');
 
 const variants = releaseUrl 
     ? await getVariants(org, repo, releaseUrl)
@@ -27542,15 +27667,84 @@ if (!variants || variants.length === 0) {
     throw new Error(`No variants found for ${repo} version ${selectedVersion}`);
 }
 
-console.log(`\n[INFO] Using variant: ${variants[0].variant} (${variants[0].arch}, ${variants[0].dpi})\n`);
+// Filter variants by arch and dpi if specified
+let selectedVariant = variants[0];
+if (archFilter || dpiFilter) {
+    let filtered = variants;
+    
+        if (archFilter) {
+        filtered = filtered.filter(v => v.arch.toLowerCase() === archFilter.toLowerCase());
+        if (filtered.length === 0) {
+            throw new Error(`No variants found for arch: ${archFilter}`);
+        }
+        debugLog(`[DEBUG] Filtered by arch '${archFilter}': ${filtered.length} variant(s)`);
+    }
+    
+    if (dpiFilter) {
+        filtered = filtered.filter(v => v.dpi.toLowerCase() === dpiFilter.toLowerCase());
+        if (filtered.length === 0) {
+            throw new Error(`No variants found for dpi: ${dpiFilter}`);
+        }
+        debugLog(`[DEBUG] Filtered by dpi '${dpiFilter}': ${filtered.length} variant(s)`);
+    }
+    
+    selectedVariant = filtered[0];
+}
+const variantMinSdkApiLevel = selectedVariant.minSdkApiLevel || selectedMinSdkApiLevel;
 
-const dlurl = await getDownloadUrl(variants[0].url)
-const out = await downloadAPK(dlurl, name, overwrite)
+console.log(`\n[INFO] Using variant:`);
+console.log(`[INFO]   Variant: ${selectedVariant.variant}`);
+console.log(`[INFO]   Architecture: ${selectedVariant.arch}`);
+console.log(`[INFO]   DPI: ${selectedVariant.dpi}`);
+console.log(`[INFO]   Version: ${selectedVariant.version}`);
+if (selectedVariant.date) {
+    console.log(`[INFO]   Date: ${selectedVariant.date}`);
+}
+if (selectedVariant.signature) {
+    console.log(`[INFO]   Signature: ${selectedVariant.signature}`);
+}
+console.log(`[INFO]   API Level: ${variantMinSdkApiLevel}\n`);
+
+const dlurl = await getDownloadUrl(selectedVariant.url)
+
+// Build filename with template variables
+let finalFilename = name;
+if (finalFilename) {
+    // Replace template variables
+    finalFilename = finalFilename
+        .replace(/\$\{version\}/g, selectedVariant.version)
+        .replace(/\$\{variant\}/g, selectedVariant.variant)
+        .replace(/\$\{arch\}/g, selectedVariant.arch)
+        .replace(/\$\{dpi\}/g, selectedVariant.dpi)
+        .replace(/\$\{minSdk\}/g, variantMinSdkApiLevel)
+        .replace(/\$\{signature\}/g, selectedVariant.signature || '')
+        .replace(/\$\{date\}/g, selectedVariant.date || '');
+    
+    debugLog(`[DEBUG] Final filename: ${finalFilename}`);
+}
+
+const out = await downloadAPK(dlurl, finalFilename, overwrite)
 
 if (out)
 {
     _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('filename', out);
+    if (variantMinSdkApiLevel) {
+        _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('minSdk', variantMinSdkApiLevel.toString());
+    }
+    _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('variant', selectedVariant.variant);
+    _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('arch', selectedVariant.arch);
+    _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('dpi', selectedVariant.dpi);
+    _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('version', selectedVariant.version);
+    if (selectedVariant.date) {
+        _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('date', selectedVariant.date);
+    }
+    if (selectedVariant.signature) {
+        _actions_core__WEBPACK_IMPORTED_MODULE_4__.setOutput('signature', selectedVariant.signature);
+    }
     _actions_core__WEBPACK_IMPORTED_MODULE_4__.info(`${repo} Successfully downloaded to '${out}'!`);
+    if (variantMinSdkApiLevel) {
+        _actions_core__WEBPACK_IMPORTED_MODULE_4__.info(`Minimum SDK: API level ${variantMinSdkApiLevel}`);
+    }
 }
 __webpack_async_result__();
 } catch(e) { __webpack_async_result__(e); } }, 1);
