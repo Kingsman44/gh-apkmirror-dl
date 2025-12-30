@@ -1,26 +1,37 @@
 name: Download APK from APKMirror
-description: 'Download APK from APKMirror'
+description: 'Download APK from APKMirror with regex version pattern support'
 inputs:
     org:
-      description: 'Organization name'
+      description: 'Organization name on APKMirror'
       required: true
     repo:
-      description: 'Repository name'
+      description: 'Repository name on APKMirror'
       required: true
     version:
-      description: 'Version of the app'
+      description: 'Specific version to download (optional, auto-detects latest if not provided)'
       required: false
+    versionPattern:
+      description: 'Regex pattern to match version (e.g., ".*-pixel" or ".*-gphone")'
+      required: false
+    includePrerelease:
+      description: 'Include alpha/beta versions when auto-detecting'
+      required: false
+      default: 'false'
     bundle:
-      description: 'Use bundle'
+      description: 'Download app bundle (AAB) instead of APK'
       required: false
-      default: 'true'
+      default: 'false'
     filename:
-      description: 'The file name'
+      description: 'Output filename (uses server filename if not specified)'
       required: false
     overwrite:
-      description: 'Overwrite file'
+      description: 'Overwrite existing file'
       required: false
       default: 'true'
+
+outputs:
+  filename:
+    description: 'The downloaded filename'
 
 runs:
   using: 'node20'
