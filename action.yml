@@ -1,11 +1,11 @@
-name: Download APK from APKMirror
-description: 'Download APK from APKMirror with regex version pattern support'
+name: Download APKs
+description: 'Download APK from APKMirror'
 inputs:
     org:
-      description: 'Organization name on APKMirror'
+      description: 'Organization name'
       required: true
     repo:
-      description: 'Repository name on APKMirror'
+      description: 'Repository name'
       required: true
     version:
       description: 'Specific version to download (optional, auto-detects latest if not provided)'
